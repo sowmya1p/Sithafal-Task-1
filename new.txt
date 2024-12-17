@@ -1,0 +1,132 @@
+from PyPDF2 import PdfReader
+
+# Load the PDF
+pdf_reader = PdfReader(r"C:\Users\Mahesh\Desktop\IV-I\UNIT IV 2024-2025-DS.pdf")
+text = ""
+for page in pdf_reader.pages:
+    text += page.extract_text()
+
+print(text)
+
+
+#Long text is hard to process.
+# Break it into smaller, logical parts
+def chunk_text(text, max_chars=500):
+    chunks = [text[i:i+max_chars] for i in range(0, len(text), max_chars)]
+    return chunks
+
+chunks = chunk_text(text)
+print(chunks[:2])  # Show the first two chunks
+
+
+# Install sentence-transformers
+from sentence_transformers import SentenceTransformer
+
+model = SentenceTransformer('all-MiniLM-L6-v2')  # Pre-trained embedding model
+embeddings = model.encode(chunks)
+
+print(embeddings[0])  # Print the first embedding
+
+
+import faiss
+import numpy as np
+
+# Create a FAISS index
+dimension = embeddings[0].shape[0]
+index = faiss.IndexFlatL2(dimension)
+index.add(np.array(embeddings))  # Add embeddings to the index
+
+
+query = "what is statistical thinking?"
+query_embedding = model.encode([query])
+
+
+# Find similar chunks in the vector database
+from sklearn.metrics.pairwise import cosine_similarity
+import numpy as np
+
+similarities = cosine_similarity(query_embedding, embeddings)
+most_similar_idx = np.argmax(similarities)
+print(chunks[most_similar_idx])  # Most relevant chunk
+
+
+from transformers import pipeline
+
+generator = pipeline("text-generation", model="gpt2")
+context = chunks[most_similar_idx]
+#  use max_new_tokens to specify how long the generated text can be
+response = generator(f"Question: {query}", max_new_tokens=1000)
+print(response[0]['generated_text'])
+
+
+
+from PyPDF2 import PdfReader
+from sentence_transformers import SentenceTransformer
+from sklearn.metrics.pairwise import cosine_similarity
+from transformers import pipeline
+import numpy as np
+
+# Step 1: Text Extraction from PDF
+def extract_text_from_pdf(pdf_path):
+    reader = PdfReader(pdf_path)
+    text = ""
+    for page in reader.pages:
+        text += page.extract_text()
+    return " ".join(text.split())
+
+# Step 2: Chunking the Text
+def chunk_text(text, max_tokens=500):
+    words = text.split()
+    for i in range(0, len(words), max_tokens):
+        yield " ".join(words[i:i + max_tokens])
+
+# Step 3: Embedding Generation
+def generate_embeddings(chunks, model):
+    return model.encode(chunks)
+
+# Step 4: Query Processing and Similarity Search
+def retrieve_most_relevant_chunk(query, chunks, embeddings, model):
+    query_embedding = model.encode(query)
+    similarities = cosine_similarity([query_embedding], embeddings)
+    most_similar_idx = np.argmax(similarities)
+    return chunks[most_similar_idx]
+
+# Step 5: Generate Response
+def generate_response(context, query, generator):
+    response = generator(f"Question: {query}\n", max_new_tokens=100)
+    return response[0]['generated_text']
+
+# Main Pipeline
+def pdf_query_pipeline(pdf_path, user_query):
+    # Load Pre-trained Models
+    embedding_model = SentenceTransformer('all-MiniLM-L6-v2')  # Embedding model
+    text_generator = pipeline("text-generation", model="gpt2")  # Text generation model
+
+    # Extract text from PDF
+    print("Extracting text from PDF...")
+    text = extract_text_from_pdf(pdf_path)
+
+    # Chunk the text
+    print("Chunking text into smaller parts...")
+    chunks = list(chunk_text(text))
+
+    # Generate embeddings for chunks
+    print("Generating embeddings for chunks...")
+    embeddings = generate_embeddings(chunks, embedding_model)
+
+    # Retrieve the most relevant chunk for the query
+    print("Finding the most relevant chunk...")
+    relevant_chunk = retrieve_most_relevant_chunk(user_query, chunks, embeddings, embedding_model)
+
+    # Generate a response based on the relevant chunk
+    print("Generating response...")
+    response = generate_response(relevant_chunk, user_query, text_generator)
+
+    return response
+
+# Example Usage
+pdf_path = r"C:\Users\Mahesh\Desktop\IV-I\UNIT IV 2024-2025-DS.pdf"  # Replace with your PDF file path
+user_query = input('Type the Query: ')  # Replace with your query
+
+response = pdf_query_pipeline(pdf_path, user_query)
+print("\nGenerated Response:\n", response)
